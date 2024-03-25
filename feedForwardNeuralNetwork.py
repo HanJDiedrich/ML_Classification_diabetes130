@@ -2,8 +2,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import StandardScaler
 
 from sklearn.neural_network import MLPClassifier
 seed = 1234
@@ -22,8 +24,6 @@ categorical_cols = ['race', 'gender', 'age', 'diabetesMed', 'readmitted']
 train_encode = pd.get_dummies(train_data, columns= categorical_cols)
 test_encode = pd.get_dummies(test_data, columns= categorical_cols)
 
-print(train_encode.head())
-
 #create feature matrix and target
 target_col = ['readmitted_<30','readmitted_>30','readmitted_NO']
 
@@ -32,12 +32,22 @@ y_tr = train_encode[target_col].idxmax(axis= 1)
 X_te = test_encode.drop(columns= target_col)
 y_te = test_encode[target_col].idxmax(axis= 1) #combine one-hot encodings
 
-print(X_tr.shape, y_tr.shape, X_te.shape, y_te.shape)
+#print(X_tr.shape, y_tr.shape, X_te.shape, y_te.shape)
 
+#scale data to help with convergence
+scaler = StandardScaler()
+X_tr_scaled = scaler.fit_transform(X_tr) #Fit and transform
+X_te_scaled = scaler.transform(X_te)
+print(X_tr_scaled.shape, y_tr.shape, X_te_scaled.shape, y_te.shape)
+
+#Create Validation set
+X_train, X_val, y_train, y_val = train_test_split(X_tr_scaled, y_tr, test_size=0.25, random_state=seed)
 
 print("Feed Forward Neural Network")
 
+
 #Using grid search
+
 parameter_grid = {
     'hidden_layer_sizes': [(50,), (100,), (150,), (100, 100), (150, 150)],
     'activation': ['relu', 'tanh', 'logistic'],
@@ -48,19 +58,20 @@ parameter_grid = {
 }
 
 #Grid search or not
-grid = False
+grid = True
 
 if grid:   
     MLP = MLPClassifier(random_state= seed)
     grid_search = GridSearchCV(MLP, parameter_grid, cv= 5, scoring= 'accuracy')
-    grid_search.fit(X_tr, y_tr)
+    grid_search.fit(X_tr_scaled, y_tr)
     
     print(f"Best parameters: {grid_search.best_params_}")
     best_MLP = grid_search.best_estimator_
-    MLP_prediction = best_MLP.predict(X_te)
+    MLP_prediction = best_MLP.predict(X_te_scaled)
     print(f'Accuracy score: {accuracy_score(y_te, MLP_prediction)}')
-    train_error = 1 - best_MLP.score(X_tr,y_tr)
-    test_error = 1 - best_MLP.score(X_te, y_te)
+    
+    train_error = 1 - best_MLP.score(X_tr_scaled, y_tr)
+    test_error = 1 - best_MLP.score(X_te_scaled, y_te)
     print(f"Training error: {train_error}")
     print(f"Testing error: {test_error}")
 
@@ -75,15 +86,17 @@ if not grid:
     mi = 100 #max_iter
     
     MLP = MLPClassifier(hidden_layer_sizes= hs, activation= act, solver= sol, batch_size= bs, learning_rate= 'constant', learning_rate_init= lr, n_iter_no_change= nc, max_iter= mi, random_state= seed)
-    MLP.fit(X_tr, y_tr)
-    MLP_prediction = MLP.predict(X_te)
-    print(f'Accuracy score: {accuracy_score(y_te, MLP_prediction)}')
+    MLP.fit(X_train, y_train)
+    val_MLP_prediction = MLP.predict(X_val) #validation
+    print(f'Validation Accuracy: {accuracy_score(y_val, val_MLP_prediction)}')
     
-    train_error = 1 - MLP.score(X_tr,y_tr)
-    test_error = 1 - MLP.score(X_te, y_te)
-    print(f"Training error: {train_error}")
-    print(f"Testing error: {test_error}")
-
+    test_MLP_prediction = MLP.predict(X_te_scaled) #test
+    print(f'Test Accuracy: {accuracy_score(y_te, MLP_prediction)}')
+    
+    train_error = 1 - MLP.score(X_tr_scaled, y_tr)
+    test_error = 1 - MLP.score(X_te_scaled, y_te)
+    print(f"Training Error: {train_error}")
+    print(f"Testing Error: {test_error}")
 
 
 '''
